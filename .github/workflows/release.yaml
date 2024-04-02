@@ -35,7 +35,7 @@ jobs:
         uses: kubernetes-sigs/release-actions/setup-tejolote@841d76a188a7c121231a863572e27012805715a2 # v0.1.4
       - name: Run tejolote
         run: |
-          tejolote attest "github://kubernetes-sigs/karpenter/${{ github.run_id }}" --artifacts "github://kubernetes-sigs/karpenter/$TAG" --output karpenter.intoto.json --sign
+          tejolote attest "github://jmdeal/karpenter/${{ github.run_id }}" --artifacts "github://jmdeal/karpenter/$TAG" --output karpenter.intoto.json --sign
       - name: Add the tejolote provenance attestation to release
         env:
           GH_TOKEN: ${{ github.token }}
