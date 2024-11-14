@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/samber/lo"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -47,7 +49,7 @@ import (
 func NewScheduler(ctx context.Context, kubeClient client.Client, nodePools []*v1beta1.NodePool,
 	cluster *state.Cluster, stateNodes []*state.StateNode, topology *Topology,
 	instanceTypes map[string][]*cloudprovider.InstanceType, daemonSetPods []*v1.Pod,
-	recorder events.Recorder) *Scheduler {
+	recorder events.Recorder, clock clock.Clock) *Scheduler {
 
 	// if any of the nodePools add a taint with a prefer no schedule effect, we add a toleration for the taint
 	// during preference relaxation
@@ -80,6 +82,7 @@ func NewScheduler(ctx context.Context, kubeClient client.Client, nodePools []*v1
 		recorder:           recorder,
 		preferences:        &Preferences{ToleratePreferNoSchedule: toleratePreferNoSchedule},
 		remainingResources: lo.SliceToMap(nodePools, func(np *v1beta1.NodePool) (string, v1.ResourceList) { return np.Name, v1.ResourceList(np.Spec.Limits) }),
+		clock:              clock,
 	}
 	s.calculateExistingNodeClaims(stateNodes, daemonSetPods)
 	return s
@@ -98,6 +101,7 @@ type Scheduler struct {
 	cluster            *state.Cluster
 	recorder           events.Recorder
 	kubeClient         client.Client
+	clock              clock.Clock
 }
 
 // Results contains the results of the scheduling operation
@@ -217,10 +221,21 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*v1.Pod) Results {
 	}
 	q := NewQueue(pods, s.cachedPodRequests)
 
+	startTime := s.clock.Now()
+	lastLogTime := s.clock.Now()
+	batchSize := len(q.pods)
 	for {
 		QueueDepth.With(
 			prometheus.Labels{controllerLabel: injection.GetControllerName(ctx), schedulingIDLabel: string(s.id)},
 		).Set(float64(len(q.pods)))
+		UnfinishedWorkSeconds.With(prometheus.Labels{
+			controllerLabel: injection.GetControllerName(ctx), schedulingIDLabel: string(s.id),
+		}).Set(float64(s.clock.Since(startTime)))
+
+		if s.clock.Since(lastLogTime) > time.Minute {
+			log.FromContext(ctx).WithValues("pods-scheduled", batchSize-len(q.pods), "pods-remaining", len(q.pods), "duration", s.clock.Since(startTime).Truncate(time.Second), "scheduling-id", string(s.id)).Info("computing pod scheduling...")
+			lastLogTime = s.clock.Now()
+		}
 		// Try the next pod
 		pod, ok := q.Pop()
 		if !ok {
@@ -241,7 +256,9 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*v1.Pod) Results {
 			}
 		}
 	}
-
+	UnfinishedWorkSeconds.With(prometheus.Labels{
+		controllerLabel: injection.GetControllerName(ctx), schedulingIDLabel: string(s.id),
+	}).Set(0)
 	for _, m := range s.newNodeClaims {
 		m.FinalizeScheduling()
 	}

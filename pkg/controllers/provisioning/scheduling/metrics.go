@@ -57,4 +57,16 @@ var (
 			schedulingIDLabel,
 		},
 	)
+	UnfinishedWorkSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: metrics.Namespace,
+			Subsystem: "provisioner",
+			Name:      "scheduling_unfinished_work_seconds",
+			Help:      "How many seconds of work has been done and has not been observed by scheduling_simulation_duration_seconds.",
+		},
+		[]string{
+			controllerLabel,
+			schedulingIDLabel,
+		},
+	)
 )

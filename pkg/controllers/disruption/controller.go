@@ -78,7 +78,7 @@ func NewController(clk clock.Clock, kubeClient client.Client, provisioner *provi
 			// Expire any NodeClaims that must be deleted, allowing their pods to potentially land on currently
 			NewExpiration(clk, kubeClient, cluster, provisioner, recorder),
 			// Terminate any NodeClaims that have drifted from provisioning specifications, allowing the pods to reschedule.
-			NewDrift(kubeClient, cluster, provisioner, recorder),
+			NewDrift(kubeClient, cluster, provisioner, recorder, clk),
 			// Delete any remaining empty NodeClaims as there is zero cost in terms of disruption.  Emptiness and
 			// emptyNodeConsolidation are mutually exclusive, only one of these will operate
 			NewEmptiness(clk, recorder),

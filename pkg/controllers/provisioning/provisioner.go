@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -82,10 +83,12 @@ type Provisioner struct {
 	cluster        *state.Cluster
 	recorder       events.Recorder
 	cm             *pretty.ChangeMonitor
+	clock          clock.Clock
 }
 
 func NewProvisioner(kubeClient client.Client, recorder events.Recorder,
 	cloudProvider cloudprovider.CloudProvider, cluster *state.Cluster,
+	clock clock.Clock,
 ) *Provisioner {
 	p := &Provisioner{
 		batcher:        NewBatcher(),
@@ -95,6 +98,7 @@ func NewProvisioner(kubeClient client.Client, recorder events.Recorder,
 		cluster:        cluster,
 		recorder:       recorder,
 		cm:             pretty.NewChangeMonitor(),
+		clock:          clock,
 	}
 	return p
 }
@@ -192,7 +196,7 @@ func (p *Provisioner) consolidationWarnings(ctx context.Context, po *v1.Pod) {
 var ErrNodePoolsNotFound = errors.New("no nodepools found")
 
 //nolint:gocyclo
-func (p *Provisioner) NewScheduler(ctx context.Context, pods []*v1.Pod, stateNodes []*state.StateNode) (*scheduler.Scheduler, error) {
+func (p *Provisioner) NewScheduler(ctx context.Context, pods []*v1.Pod, stateNodes []*state.StateNode, clock clock.Clock) (*scheduler.Scheduler, error) {
 	nodePoolList := &v1beta1.NodePoolList{}
 	err := p.kubeClient.List(ctx, nodePoolList)
 	if err != nil {
@@ -279,7 +283,7 @@ func (p *Provisioner) NewScheduler(ctx context.Context, pods []*v1.Pod, stateNod
 	if err != nil {
 		return nil, fmt.Errorf("getting daemon pods, %w", err)
 	}
-	return scheduler.NewScheduler(ctx, p.kubeClient, lo.ToSlicePtr(nodePoolList.Items), p.cluster, stateNodes, topology, instanceTypes, daemonSetPods, p.recorder), nil
+	return scheduler.NewScheduler(ctx, p.kubeClient, lo.ToSlicePtr(nodePoolList.Items), p.cluster, stateNodes, topology, instanceTypes, daemonSetPods, p.recorder, clock), nil
 }
 
 func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
@@ -315,7 +319,7 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	if len(pods) == 0 {
 		return scheduler.Results{}, nil
 	}
-	s, err := p.NewScheduler(ctx, pods, nodes.Active())
+	s, err := p.NewScheduler(ctx, pods, nodes.Active(), p.clock)
 	if err != nil {
 		if errors.Is(err, ErrNodePoolsNotFound) {
 			log.FromContext(ctx).Info("no nodepools found")

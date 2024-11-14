@@ -52,7 +52,7 @@ func NewControllers(
 	cloudProvider cloudprovider.CloudProvider,
 ) []controller.Controller {
 
-	p := provisioning.NewProvisioner(kubeClient, recorder, cloudProvider, cluster)
+	p := provisioning.NewProvisioner(kubeClient, recorder, cloudProvider, cluster, clock)
 	evictionQueue := terminator.NewQueue(kubeClient, recorder)
 	disruptionQueue := orchestration.NewQueue(kubeClient, recorder, cluster, clock, p)
 
