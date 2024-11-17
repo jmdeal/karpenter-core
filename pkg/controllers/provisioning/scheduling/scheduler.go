@@ -89,7 +89,7 @@ type Scheduler struct {
 	newNodeClaims      []*NodeClaim
 	existingNodes      []*ExistingNode
 	nodeClaimTemplates []*NodeClaimTemplate
-	remainingResources map[string]v1.ResourceList               // (NodePool name) -> remaining resources for that NodePool
+	remainingResources map[string]v1.ResourceList // (NodePool name) -> remaining resources for that NodePool
 	daemonOverhead     map[*NodeClaimTemplate]v1.ResourceList
 	preferences        *Preferences
 	topology           *Topology
