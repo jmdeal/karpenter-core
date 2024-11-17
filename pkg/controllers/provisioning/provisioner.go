@@ -227,10 +227,10 @@ func (p *Provisioner) NewScheduler(ctx context.Context, pods []*v1.Pod, stateNod
 		}
 		if len(instanceTypeOptions) == 0 {
 			log.FromContext(ctx).WithValues("NodePool", klog.KRef("", nodePool.Name)).Info("skipping, no resolved instance types found")
-
 			continue
 		}
-		instanceTypes[nodePool.Name] = append(instanceTypes[nodePool.Name], instanceTypeOptions...)
+
+		instanceTypes[nodePool.Name] = instanceTypeOptions
 
 		// Construct Topology Domains
 		for _, instanceType := range instanceTypeOptions {

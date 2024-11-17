@@ -59,15 +59,22 @@ func NewScheduler(ctx context.Context, kubeClient client.Client, nodePools []*v1
 			}
 		}
 	}
-
-	templates := lo.Map(nodePools, func(np *v1beta1.NodePool, _ int) *NodeClaimTemplate { return NewNodeClaimTemplate(np) })
+	// Pre-filter instance types eligible for NodePools to reduce work done during scheduling loops for pods
+	templates := lo.FilterMap(nodePools, func(np *v1beta1.NodePool, _ int) (*NodeClaimTemplate, bool) {
+		nct := NewNodeClaimTemplate(np)
+		nct.InstanceTypeOptions = filterInstanceTypesByRequirements(instanceTypes[np.Name], nct.Requirements, v1.ResourceList{}).remaining
+		if len(nct.InstanceTypeOptions) == 0 {
+			log.FromContext(ctx).WithValues("NodePool", klog.KRef("", np.Name)).Info("skipping, nodepool requirements filtered out all instance types")
+			return nil, false
+		}
+		return nct, true
+	})
 	s := &Scheduler{
 		id:                 uuid.NewUUID(),
 		kubeClient:         kubeClient,
 		nodeClaimTemplates: templates,
 		topology:           topology,
 		cluster:            cluster,
-		instanceTypes:      instanceTypes,
 		daemonOverhead:     getDaemonOverhead(templates, daemonSetPods),
 		recorder:           recorder,
 		preferences:        &Preferences{ToleratePreferNoSchedule: toleratePreferNoSchedule},
@@ -83,7 +90,6 @@ type Scheduler struct {
 	existingNodes      []*ExistingNode
 	nodeClaimTemplates []*NodeClaimTemplate
 	remainingResources map[string]v1.ResourceList               // (NodePool name) -> remaining resources for that NodePool
-	instanceTypes      map[string][]*cloudprovider.InstanceType // (NodePool name) -> instance types for NodePool
 	daemonOverhead     map[*NodeClaimTemplate]v1.ResourceList
 	preferences        *Preferences
 	topology           *Topology
@@ -266,17 +272,16 @@ func (s *Scheduler) add(ctx context.Context, pod *v1.Pod) error {
 	// Create new node
 	var errs error
 	for _, nodeClaimTemplate := range s.nodeClaimTemplates {
-		instanceTypes := s.instanceTypes[nodeClaimTemplate.NodePoolName]
+		instanceTypes := nodeClaimTemplate.InstanceTypeOptions
 		// if limits have been applied to the nodepool, ensure we filter instance types to avoid violating those limits
 		if remaining, ok := s.remainingResources[nodeClaimTemplate.NodePoolName]; ok {
-			instanceTypes = filterByRemainingResources(s.instanceTypes[nodeClaimTemplate.NodePoolName], remaining)
+			instanceTypes = filterByRemainingResources(instanceTypes, remaining)
 			if len(instanceTypes) == 0 {
 				errs = multierr.Append(errs, fmt.Errorf("all available instance types exceed limits for nodepool: %q", nodeClaimTemplate.NodePoolName))
 				continue
-			} else if len(s.instanceTypes[nodeClaimTemplate.NodePoolName]) != len(instanceTypes) {
-
+			} else if len(nodeClaimTemplate.InstanceTypeOptions) != len(instanceTypes) {
 				log.FromContext(ctx).V(1).WithValues("NodePool", klog.KRef("", nodeClaimTemplate.NodePoolName)).Info(fmt.Sprintf("%d out of %d instance types were excluded because they would breach limits",
-					len(s.instanceTypes[nodeClaimTemplate.NodePoolName])-len(instanceTypes), len(s.instanceTypes[nodeClaimTemplate.NodePoolName])))
+					len(nodeClaimTemplate.InstanceTypeOptions)-len(instanceTypes), len(nodeClaimTemplate.InstanceTypeOptions)))
 			}
 		}
 		nodeClaim := NewNodeClaim(nodeClaimTemplate, s.topology, s.daemonOverhead[nodeClaimTemplate], instanceTypes)
