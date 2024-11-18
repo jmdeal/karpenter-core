@@ -23,6 +23,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/awslabs/operatorpkg/option"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/samber/lo"
 	"go.uber.org/multierr"
@@ -46,10 +47,31 @@ import (
 	"sigs.k8s.io/karpenter/pkg/utils/resources"
 )
 
-func NewScheduler(kubeClient client.Client, nodePools []*v1.NodePool,
-	cluster *state.Cluster, stateNodes []*state.StateNode, topology *Topology,
-	instanceTypes map[string][]*cloudprovider.InstanceType, daemonSetPods []*corev1.Pod,
-	recorder events.Recorder, clock clock.Clock) *Scheduler {
+type SchedulerOptions = option.Function[schedulerOptions]
+
+type schedulerOptions struct {
+	timeout *time.Duration
+}
+
+func WithTimeout(timeout time.Duration) SchedulerOptions {
+	return func(opts *schedulerOptions) {
+		opts.timeout = lo.ToPtr(timeout)
+	}
+}
+
+func NewScheduler(
+	ctx context.Context,
+	kubeClient client.Client,
+	nodePools []*v1.NodePool,
+	cluster *state.Cluster,
+	stateNodes []*state.StateNode,
+	topology *Topology,
+	instanceTypes map[string][]*cloudprovider.InstanceType,
+	daemonSetPods []*corev1.Pod,
+	recorder events.Recorder,
+	clock clock.Clock,
+	opts ...SchedulerOptions,
+) *Scheduler {
 
 	// if any of the nodePools add a taint with a prefer no schedule effect, we add a toleration for the taint
 	// during preference relaxation
@@ -61,16 +83,25 @@ func NewScheduler(kubeClient client.Client, nodePools []*v1.NodePool,
 			}
 		}
 	}
-
-	templates := lo.Map(nodePools, func(np *v1.NodePool, _ int) *NodeClaimTemplate { return NewNodeClaimTemplate(np) })
+	// Pre-filter instance types eligible for NodePools to reduce work done during scheduling loops for pods
+	templates := lo.FilterMap(nodePools, func(np *v1.NodePool, _ int) (*NodeClaimTemplate, bool) {
+		nct := NewNodeClaimTemplate(np)
+		nct.InstanceTypeOptions = filterInstanceTypesByRequirements(instanceTypes[np.Name], nct.Requirements, corev1.ResourceList{}).remaining
+		if len(nct.InstanceTypeOptions) == 0 {
+			log.FromContext(ctx).WithValues("NodePool", klog.KRef("", np.Name)).Info("skipping, nodepool requirements filtered out all instance types")
+			return nil, false
+		}
+		return nct, true
+	})
 	s := &Scheduler{
+		schedulerOptions:   *option.Resolve(opts...),
 		id:                 uuid.NewUUID(),
 		kubeClient:         kubeClient,
 		nodeClaimTemplates: templates,
 		topology:           topology,
 		cluster:            cluster,
-		instanceTypes:      instanceTypes,
 		daemonOverhead:     getDaemonOverhead(templates, daemonSetPods),
+		cachedPodRequests:  map[types.UID]corev1.ResourceList{}, // cache pod requests to avoid having to continually recompute this total
 		recorder:           recorder,
 		preferences:        &Preferences{ToleratePreferNoSchedule: toleratePreferNoSchedule},
 		remainingResources: lo.SliceToMap(nodePools, func(np *v1.NodePool) (string, corev1.ResourceList) {
@@ -83,13 +114,15 @@ func NewScheduler(kubeClient client.Client, nodePools []*v1.NodePool,
 }
 
 type Scheduler struct {
+	schedulerOptions
+
 	id                 types.UID // Unique UUID attached to this scheduling loop
 	newNodeClaims      []*NodeClaim
 	existingNodes      []*ExistingNode
 	nodeClaimTemplates []*NodeClaimTemplate
-	remainingResources map[string]corev1.ResourceList           // (NodePool name) -> remaining resources for that NodePool
-	instanceTypes      map[string][]*cloudprovider.InstanceType // (NodePool name) -> instance types for NodePool
+	remainingResources map[string]corev1.ResourceList // (NodePool name) -> remaining resources for that NodePool
 	daemonOverhead     map[*NodeClaimTemplate]corev1.ResourceList
+	cachedPodRequests  map[types.UID]corev1.ResourceList // (Pod Namespace/Name) -> calculated resource requests for the pod
 	preferences        *Preferences
 	topology           *Topology
 	cluster            *state.Cluster
@@ -198,6 +231,7 @@ func (r Results) TruncateInstanceTypes(maxInstanceTypes int) Results {
 	return r
 }
 
+// nolint:gocyclo
 func (s *Scheduler) Solve(ctx context.Context, pods []*corev1.Pod) Results {
 	defer metrics.Measure(SchedulingDurationSeconds.With(
 		prometheus.Labels{ControllerLabel: injection.GetControllerName(ctx)},
@@ -209,20 +243,42 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*corev1.Pod) Results {
 	// We need to schedule them alternating, A, B, A, B, .... and this solution also solves that as well.
 	errors := map[*corev1.Pod]error{}
 	QueueDepth.DeletePartialMatch(prometheus.Labels{ControllerLabel: injection.GetControllerName(ctx)}) // Reset the metric for the controller, so we don't keep old ids around
-	q := NewQueue(pods...)
+	for _, p := range pods {
+		s.cachedPodRequests[p.UID] = resources.RequestsForPods(p)
+	}
+	q := NewQueue(pods, s.cachedPodRequests)
 
 	startTime := s.clock.Now()
 	lastLogTime := s.clock.Now()
 	batchSize := len(q.pods)
 	for {
-		QueueDepth.With(
-			prometheus.Labels{ControllerLabel: injection.GetControllerName(ctx), schedulingIDLabel: string(s.id)},
-		).Set(float64(len(q.pods)))
+		UnfinishedWorkSeconds.With(prometheus.Labels{
+			ControllerLabel: injection.GetControllerName(ctx), schedulingIDLabel: string(s.id),
+		}).Set(float64(s.clock.Since(startTime)))
+		QueueDepth.With(prometheus.Labels{
+			ControllerLabel: injection.GetControllerName(ctx), schedulingIDLabel: string(s.id),
+		}).Set(float64(len(q.pods)))
 
 		if s.clock.Since(lastLogTime) > time.Minute {
-			log.FromContext(ctx).WithValues("pods-scheduled", batchSize-len(q.pods), "pods-remaining", len(q.pods), "duration", s.clock.Since(startTime).Truncate(time.Second), "scheduling-id", string(s.id)).Info("computing pod scheduling...")
+			log.FromContext(ctx).WithValues(
+				"pods-scheduled", batchSize-len(q.pods),
+				"pods-remaining", len(q.pods),
+				"duration", s.clock.Since(startTime).Truncate(time.Second),
+				"scheduling-id", string(s.id),
+			).Info("computing pod scheduling...")
 			lastLogTime = s.clock.Now()
 		}
+
+		if s.timeout != nil && s.clock.Since(startTime) > *s.timeout {
+			log.FromContext(ctx).WithValues(
+				"pods-scheduled", batchSize-len(q.pods),
+				"pods-remaining", len(q.pods),
+				"duration", s.clock.Since(startTime).Truncate(time.Second),
+				"scheduling-id", string(s.id),
+			).Info("timed out scheduling pods")
+			break
+		}
+
 		// Try the next pod
 		pod, ok := q.Pop()
 		if !ok {
@@ -243,11 +299,11 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*corev1.Pod) Results {
 			}
 		}
 	}
-
+	UnfinishedWorkSeconds.With(prometheus.Labels{ControllerLabel: injection.GetControllerName(ctx), schedulingIDLabel: string(s.id)}).Set(0)
 	for _, m := range s.newNodeClaims {
 		m.FinalizeScheduling()
 	}
-	// clear any nil errors, so we can know that len(PodErrors) == 0 => all pods scheduled
+	// clear any nil errors
 	for k, v := range errors {
 		if v == nil {
 			delete(errors, k)
@@ -263,7 +319,7 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*corev1.Pod) Results {
 func (s *Scheduler) add(ctx context.Context, pod *corev1.Pod) error {
 	// first try to schedule against an in-flight real node
 	for _, node := range s.existingNodes {
-		if err := node.Add(ctx, s.kubeClient, pod); err == nil {
+		if err := node.Add(ctx, s.kubeClient, pod, s.cachedPodRequests[pod.UID]); err == nil {
 			return nil
 		}
 	}
@@ -273,7 +329,7 @@ func (s *Scheduler) add(ctx context.Context, pod *corev1.Pod) error {
 
 	// Pick existing node that we are about to create
 	for _, nodeClaim := range s.newNodeClaims {
-		if err := nodeClaim.Add(pod); err == nil {
+		if err := nodeClaim.Add(pod, s.cachedPodRequests[pod.UID]); err == nil {
 			return nil
 		}
 	}
@@ -281,21 +337,21 @@ func (s *Scheduler) add(ctx context.Context, pod *corev1.Pod) error {
 	// Create new node
 	var errs error
 	for _, nodeClaimTemplate := range s.nodeClaimTemplates {
-		instanceTypes := s.instanceTypes[nodeClaimTemplate.NodePoolName]
+		instanceTypes := nodeClaimTemplate.InstanceTypeOptions
 		// if limits have been applied to the nodepool, ensure we filter instance types to avoid violating those limits
 		if remaining, ok := s.remainingResources[nodeClaimTemplate.NodePoolName]; ok {
-			instanceTypes = filterByRemainingResources(s.instanceTypes[nodeClaimTemplate.NodePoolName], remaining)
+			instanceTypes = filterByRemainingResources(instanceTypes, remaining)
 			if len(instanceTypes) == 0 {
 				errs = multierr.Append(errs, fmt.Errorf("all available instance types exceed limits for nodepool: %q", nodeClaimTemplate.NodePoolName))
 				continue
-			} else if len(s.instanceTypes[nodeClaimTemplate.NodePoolName]) != len(instanceTypes) {
-
+			} else if len(nodeClaimTemplate.InstanceTypeOptions) != len(instanceTypes) {
 				log.FromContext(ctx).V(1).WithValues("NodePool", klog.KRef("", nodeClaimTemplate.NodePoolName)).Info(fmt.Sprintf("%d out of %d instance types were excluded because they would breach limits",
-					len(s.instanceTypes[nodeClaimTemplate.NodePoolName])-len(instanceTypes), len(s.instanceTypes[nodeClaimTemplate.NodePoolName])))
+					len(nodeClaimTemplate.InstanceTypeOptions)-len(instanceTypes), len(nodeClaimTemplate.InstanceTypeOptions)))
 			}
 		}
 		nodeClaim := NewNodeClaim(nodeClaimTemplate, s.topology, s.daemonOverhead[nodeClaimTemplate], instanceTypes)
-		if err := nodeClaim.Add(pod); err != nil {
+		if err := nodeClaim.Add(pod, s.cachedPodRequests[pod.UID]); err != nil {
+			nodeClaim.Destroy() // Ensure we cleanup any changes that we made while mocking out a NodeClaim
 			errs = multierr.Append(errs, fmt.Errorf("incompatible with nodepool %q, daemonset overhead=%s, %w",
 				nodeClaimTemplate.NodePoolName,
 				resources.String(s.daemonOverhead[nodeClaimTemplate]),
@@ -314,9 +370,10 @@ func (s *Scheduler) calculateExistingNodeClaims(stateNodes []*state.StateNode, d
 	// create our existing nodes
 	for _, node := range stateNodes {
 		// Calculate any daemonsets that should schedule to the inflight node
+		taints := node.Taints()
 		var daemons []*corev1.Pod
 		for _, p := range daemonSetPods {
-			if err := scheduling.Taints(node.Taints()).Tolerates(p); err != nil {
+			if err := scheduling.Taints(taints).Tolerates(p); err != nil {
 				continue
 			}
 			if err := scheduling.NewLabelRequirements(node.Labels()).Compatible(scheduling.NewPodRequirements(p)); err != nil {
@@ -324,7 +381,7 @@ func (s *Scheduler) calculateExistingNodeClaims(stateNodes []*state.StateNode, d
 			}
 			daemons = append(daemons, p)
 		}
-		s.existingNodes = append(s.existingNodes, NewExistingNode(node, s.topology, resources.RequestsForPods(daemons...)))
+		s.existingNodes = append(s.existingNodes, NewExistingNode(node, s.topology, taints, resources.RequestsForPods(daemons...)))
 
 		// We don't use the status field and instead recompute the remaining resources to ensure we have a consistent view
 		// of the cluster during scheduling.  Depending on how node creation falls out, this will also work for cases where

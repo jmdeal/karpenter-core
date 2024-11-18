@@ -216,7 +216,7 @@ func (p *Provisioner) consolidationWarnings(ctx context.Context, pods []*corev1.
 var ErrNodePoolsNotFound = errors.New("no nodepools found")
 
 //nolint:gocyclo
-func (p *Provisioner) NewScheduler(ctx context.Context, pods []*corev1.Pod, stateNodes []*state.StateNode) (*scheduler.Scheduler, error) {
+func (p *Provisioner) NewScheduler(ctx context.Context, pods []*corev1.Pod, stateNodes []*state.StateNode, opts ...scheduler.SchedulerOptions) (*scheduler.Scheduler, error) {
 	nodePoolList := &v1.NodePoolList{}
 	err := p.kubeClient.List(ctx, nodePoolList)
 	if err != nil {
@@ -252,10 +252,10 @@ func (p *Provisioner) NewScheduler(ctx context.Context, pods []*corev1.Pod, stat
 		}
 		if len(instanceTypeOptions) == 0 {
 			log.FromContext(ctx).WithValues("NodePool", klog.KRef("", nodePool.Name)).Info("skipping, no resolved instance types found")
-
 			continue
 		}
-		instanceTypes[nodePool.Name] = append(instanceTypes[nodePool.Name], instanceTypeOptions...)
+
+		instanceTypes[nodePool.Name] = instanceTypeOptions
 
 		// Construct Topology Domains
 		for _, instanceType := range instanceTypeOptions {
@@ -306,7 +306,7 @@ func (p *Provisioner) NewScheduler(ctx context.Context, pods []*corev1.Pod, stat
 	if err != nil {
 		return nil, fmt.Errorf("getting daemon pods, %w", err)
 	}
-	return scheduler.NewScheduler(p.kubeClient, lo.ToSlicePtr(nodePoolList.Items), p.cluster, stateNodes, topology, instanceTypes, daemonSetPods, p.recorder, p.clock), nil
+	return scheduler.NewScheduler(ctx, p.kubeClient, lo.ToSlicePtr(nodePoolList.Items), p.cluster, stateNodes, topology, instanceTypes, daemonSetPods, p.recorder, p.clock, opts...), nil
 }
 
 func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
@@ -344,7 +344,12 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	if len(pods) == 0 {
 		return scheduler.Results{}, nil
 	}
-	s, err := p.NewScheduler(ctx, pods, nodes.Active())
+	// relax all topology related constraints before constructing scheduler (and embedded topology tracker)
+	prefs := scheduler.Preferences{}
+	for _, pod := range pods {
+		prefs.RelaxPreferrerdTopologyConstraints(ctx, pod)
+	}
+	s, err := p.NewScheduler(ctx, pods, nodes.Active(), scheduler.WithTimeout(5*time.Minute))
 	if err != nil {
 		if errors.Is(err, ErrNodePoolsNotFound) {
 			log.FromContext(ctx).Info("no nodepools found")
