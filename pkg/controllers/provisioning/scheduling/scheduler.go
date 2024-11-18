@@ -94,6 +94,7 @@ func NewScheduler(
 		return nct, true
 	})
 	s := &Scheduler{
+		schedulerOptions:   *option.Resolve(opts...),
 		id:                 uuid.NewUUID(),
 		kubeClient:         kubeClient,
 		nodeClaimTemplates: templates,
@@ -113,6 +114,8 @@ func NewScheduler(
 }
 
 type Scheduler struct {
+	schedulerOptions
+
 	id                 types.UID // Unique UUID attached to this scheduling loop
 	newNodeClaims      []*NodeClaim
 	existingNodes      []*ExistingNode
@@ -228,6 +231,7 @@ func (r Results) TruncateInstanceTypes(maxInstanceTypes int) Results {
 	return r
 }
 
+// nolint:gocyclo
 func (s *Scheduler) Solve(ctx context.Context, pods []*corev1.Pod) Results {
 	defer metrics.Measure(SchedulingDurationSeconds.With(
 		prometheus.Labels{ControllerLabel: injection.GetControllerName(ctx)},
@@ -253,9 +257,25 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*corev1.Pod) Results {
 		).Set(float64(len(q.pods)))
 
 		if s.clock.Since(lastLogTime) > time.Minute {
-			log.FromContext(ctx).WithValues("pods-scheduled", batchSize-len(q.pods), "pods-remaining", len(q.pods), "duration", s.clock.Since(startTime).Truncate(time.Second), "scheduling-id", string(s.id)).Info("computing pod scheduling...")
+			log.FromContext(ctx).WithValues(
+				"pods-scheduled", batchSize-len(q.pods),
+				"pods-remaining", len(q.pods),
+				"duration", s.clock.Since(startTime).Truncate(time.Second),
+				"scheduling-id", string(s.id),
+			).Info("computing pod scheduling...")
 			lastLogTime = s.clock.Now()
 		}
+
+		if s.timeout != nil && s.clock.Since(startTime) > *s.timeout {
+			log.FromContext(ctx).WithValues(
+				"pods-scheduled", batchSize-len(q.pods),
+				"pods-remaining", len(q.pods),
+				"duration", s.clock.Since(startTime).Truncate(time.Second),
+				"scheduling-id", string(s.id),
+			).Info("timed out scheduling pods")
+			break
+		}
+
 		// Try the next pod
 		pod, ok := q.Pop()
 		if !ok {
@@ -280,7 +300,7 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*corev1.Pod) Results {
 	for _, m := range s.newNodeClaims {
 		m.FinalizeScheduling()
 	}
-	// clear any nil errors, so we can know that len(PodErrors) == 0 => all pods scheduled
+	// clear any nil errors
 	for k, v := range errors {
 		if v == nil {
 			delete(errors, k)
