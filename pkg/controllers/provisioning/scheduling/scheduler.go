@@ -42,14 +42,28 @@ import (
 	"sigs.k8s.io/karpenter/pkg/events"
 	"sigs.k8s.io/karpenter/pkg/metrics"
 	"sigs.k8s.io/karpenter/pkg/scheduling"
+	"sigs.k8s.io/karpenter/pkg/utils/functional"
 	"sigs.k8s.io/karpenter/pkg/utils/pod"
 	"sigs.k8s.io/karpenter/pkg/utils/resources"
 )
 
+type schedulerOptions struct {
+	timeout *time.Duration
+}
+
+type SchedulerOptions = functional.Option[*schedulerOptions]
+
+func WithTimeout(timeout time.Duration) SchedulerOptions {
+	return func(opts *schedulerOptions) *schedulerOptions {
+		opts.timeout = lo.ToPtr(timeout)
+		return opts
+	}
+}
+
 func NewScheduler(ctx context.Context, kubeClient client.Client, nodePools []*v1beta1.NodePool,
 	cluster *state.Cluster, stateNodes []*state.StateNode, topology *Topology,
 	instanceTypes map[string][]*cloudprovider.InstanceType, daemonSetPods []*v1.Pod,
-	recorder events.Recorder, clock clock.Clock) *Scheduler {
+	recorder events.Recorder, clock clock.Clock, opts ...SchedulerOptions) *Scheduler {
 
 	// if any of the nodePools add a taint with a prefer no schedule effect, we add a toleration for the taint
 	// during preference relaxation
@@ -72,6 +86,7 @@ func NewScheduler(ctx context.Context, kubeClient client.Client, nodePools []*v1
 		return nct, true
 	})
 	s := &Scheduler{
+		schedulerOptions:   *functional.ResolveOptions(opts...),
 		id:                 uuid.NewUUID(),
 		kubeClient:         kubeClient,
 		nodeClaimTemplates: templates,
@@ -89,6 +104,8 @@ func NewScheduler(ctx context.Context, kubeClient client.Client, nodePools []*v1
 }
 
 type Scheduler struct {
+	schedulerOptions
+
 	id                 types.UID // Unique UUID attached to this scheduling loop
 	newNodeClaims      []*NodeClaim
 	existingNodes      []*ExistingNode
@@ -204,6 +221,7 @@ func (r Results) TruncateInstanceTypes(maxInstanceTypes int) Results {
 	return r
 }
 
+//nolint:gocyclo
 func (s *Scheduler) Solve(ctx context.Context, pods []*v1.Pod) Results {
 	defer metrics.Measure(SimulationDurationSeconds.With(
 		prometheus.Labels{controllerLabel: injection.GetControllerName(ctx)},
@@ -233,9 +251,25 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*v1.Pod) Results {
 		}).Set(float64(s.clock.Since(startTime)))
 
 		if s.clock.Since(lastLogTime) > time.Minute {
-			log.FromContext(ctx).WithValues("pods-scheduled", batchSize-len(q.pods), "pods-remaining", len(q.pods), "duration", s.clock.Since(startTime).Truncate(time.Second), "scheduling-id", string(s.id)).Info("computing pod scheduling...")
+			log.FromContext(ctx).WithValues(
+				"pods-scheduled", batchSize-len(q.pods),
+				"pods-remaining", len(q.pods),
+				"duration", s.clock.Since(startTime).Truncate(time.Second),
+				"scheduling-id", string(s.id),
+			).Info("computing pod scheduling...")
 			lastLogTime = s.clock.Now()
 		}
+
+		if s.timeout != nil && s.clock.Since(startTime) > *s.timeout {
+			log.FromContext(ctx).WithValues(
+				"pods-scheduled", batchSize-len(q.pods),
+				"pods-remaining", len(q.pods),
+				"duration", s.clock.Since(startTime).Truncate(time.Second),
+				"scheduling-id", string(s.id),
+			).Info("timed out scheduling pods")
+			break
+		}
+
 		// Try the next pod
 		pod, ok := q.Pop()
 		if !ok {
@@ -262,7 +296,7 @@ func (s *Scheduler) Solve(ctx context.Context, pods []*v1.Pod) Results {
 	for _, m := range s.newNodeClaims {
 		m.FinalizeScheduling()
 	}
-	// clear any nil errors, so we can know that len(PodErrors) == 0 => all pods scheduled
+	// clear any nil errors
 	for k, v := range errors {
 		if v == nil {
 			delete(errors, k)

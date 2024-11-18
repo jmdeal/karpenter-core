@@ -35,6 +35,18 @@ type Preferences struct {
 	ToleratePreferNoSchedule bool
 }
 
+// RelaxTopologyPreferences relaxes preferred constraints for TSC, pod affinity, and pod anti-affinity.
+func (p *Preferences) RelaxPreferrerdTopologyConstraints(ctx context.Context, pod *v1.Pod) {
+	for _, relaxFunc := range []func(*v1.Pod) *string{
+		p.removePreferredPodAffinityTerm,
+		p.removePreferredPodAntiAffinityTerm,
+		p.removeTopologySpreadScheduleAnyway,
+	} {
+		for reason := relaxFunc(pod); reason != nil; reason = relaxFunc(pod) {
+		}
+	}
+}
+
 func (p *Preferences) Relax(ctx context.Context, pod *v1.Pod) bool {
 	ctx = log.IntoContext(ctx, log.FromContext(ctx).WithValues("Pod", klog.KRef(pod.Namespace, pod.Name)))
 	relaxations := []func(*v1.Pod) *string{

@@ -196,7 +196,7 @@ func (p *Provisioner) consolidationWarnings(ctx context.Context, po *v1.Pod) {
 var ErrNodePoolsNotFound = errors.New("no nodepools found")
 
 //nolint:gocyclo
-func (p *Provisioner) NewScheduler(ctx context.Context, pods []*v1.Pod, stateNodes []*state.StateNode, clock clock.Clock) (*scheduler.Scheduler, error) {
+func (p *Provisioner) NewScheduler(ctx context.Context, pods []*v1.Pod, stateNodes []*state.StateNode, clock clock.Clock, opts ...scheduler.SchedulerOptions) (*scheduler.Scheduler, error) {
 	nodePoolList := &v1beta1.NodePoolList{}
 	err := p.kubeClient.List(ctx, nodePoolList)
 	if err != nil {
@@ -319,7 +319,12 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	if len(pods) == 0 {
 		return scheduler.Results{}, nil
 	}
-	s, err := p.NewScheduler(ctx, pods, nodes.Active(), p.clock)
+	// relax all topology related constraints before constructing scheduler (and embedded topology tracker)
+	prefs := scheduler.Preferences{}
+	for _, pod := range pods {
+		prefs.RelaxPreferrerdTopologyConstraints(ctx, pod)
+	}
+	s, err := p.NewScheduler(ctx, pods, nodes.Active(), p.clock, scheduler.WithTimeout(5*time.Minute))
 	if err != nil {
 		if errors.Is(err, ErrNodePoolsNotFound) {
 			log.FromContext(ctx).Info("no nodepools found")
