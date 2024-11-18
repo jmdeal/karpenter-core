@@ -51,10 +51,10 @@ type schedulerOptions struct {
 	timeout *time.Duration
 }
 
-type SchedulerOptions = functional.Option[*schedulerOptions]
+type SchedulerOptions = functional.Option[schedulerOptions]
 
 func WithTimeout(timeout time.Duration) SchedulerOptions {
-	return func(opts *schedulerOptions) *schedulerOptions {
+	return func(opts schedulerOptions) schedulerOptions {
 		opts.timeout = lo.ToPtr(timeout)
 		return opts
 	}
@@ -86,7 +86,7 @@ func NewScheduler(ctx context.Context, kubeClient client.Client, nodePools []*v1
 		return nct, true
 	})
 	s := &Scheduler{
-		schedulerOptions:   *functional.ResolveOptions(opts...),
+		schedulerOptions:   functional.ResolveOptions(opts...),
 		id:                 uuid.NewUUID(),
 		kubeClient:         kubeClient,
 		nodeClaimTemplates: templates,
