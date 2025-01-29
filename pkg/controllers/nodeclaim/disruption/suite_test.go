@@ -79,7 +79,7 @@ var _ = BeforeEach(func() {
 		OperatingSystems: sets.New(string(corev1.Linux)),
 		Offerings: []cloudprovider.Offering{
 			{
-				OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+				Available: true,
 				Requirements: scheduling.NewLabelRequirements(map[string]string{
 					v1.CapacityTypeLabelKey:  v1.CapacityTypeSpot,
 					corev1.LabelTopologyZone: "test-zone-1a",
@@ -87,7 +87,7 @@ var _ = BeforeEach(func() {
 				Price: fake.PriceFromResources(resources),
 			},
 			{
-				OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+				Available: true,
 				Requirements: scheduling.NewLabelRequirements(map[string]string{
 					v1.CapacityTypeLabelKey:  v1.CapacityTypeOnDemand,
 					corev1.LabelTopologyZone: "test-zone-1a",

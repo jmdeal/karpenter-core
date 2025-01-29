@@ -609,14 +609,14 @@ var _ = Describe("Instance Type Selection", func() {
 				},
 				Offerings: []cloudprovider.Offering{
 					{
-						OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-						Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeOnDemand, corev1.LabelTopologyZone: "test-zone-1a"}),
-						Price:                        1.0,
+						Available:    true,
+						Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeOnDemand, corev1.LabelTopologyZone: "test-zone-1a"}),
+						Price:        1.0,
 					},
 					{
-						OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-						Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1a"}),
-						Price:                        0.2,
+						Available:    true,
+						Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1a"}),
+						Price:        0.2,
 					},
 				},
 			}),
@@ -630,14 +630,14 @@ var _ = Describe("Instance Type Selection", func() {
 				},
 				Offerings: []cloudprovider.Offering{
 					{
-						OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-						Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeOnDemand, corev1.LabelTopologyZone: "test-zone-1a"}),
-						Price:                        1.3,
+						Available:    true,
+						Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeOnDemand, corev1.LabelTopologyZone: "test-zone-1a"}),
+						Price:        1.3,
 					},
 					{
-						OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-						Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1a"}),
-						Price:                        0.1,
+						Available:    true,
+						Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1a"}),
+						Price:        0.1,
 					},
 				},
 			}),
@@ -673,9 +673,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -689,9 +689,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceType(opts1))
@@ -751,9 +751,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -767,9 +767,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			opts3 := fake.InstanceTypeOptions{
@@ -783,9 +783,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts3.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.2,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.2,
 				},
 			}
 
@@ -847,9 +847,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -863,9 +863,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceTypeWithCustomRequirement(opts1, scheduler.NewRequirement(instanceGeneration, corev1.NodeSelectorOpIn, "2")))
@@ -936,9 +936,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -952,9 +952,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			opts3 := fake.InstanceTypeOptions{
@@ -968,9 +968,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts3.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.2,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.2,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceTypeWithCustomRequirement(opts1, scheduler.NewRequirement(instanceGeneration, corev1.NodeSelectorOpIn, "2")))
@@ -1031,9 +1031,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -1047,9 +1047,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.2,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.2,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceTypeWithCustomRequirement(opts1, scheduler.NewRequirement(instanceGeneration, corev1.NodeSelectorOpIn, "2")))
@@ -1100,9 +1100,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -1116,9 +1116,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			opts3 := fake.InstanceTypeOptions{
@@ -1132,9 +1132,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts3.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.2,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.2,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceType(opts1))
@@ -1202,9 +1202,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -1218,9 +1218,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			opts3 := fake.InstanceTypeOptions{
@@ -1234,9 +1234,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts3.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.2,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.2,
 				},
 			}
 			opts4 := fake.InstanceTypeOptions{
@@ -1250,9 +1250,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts4.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.2,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.2,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceTypeWithCustomRequirement(opts1, scheduler.NewRequirement(instanceGeneration, corev1.NodeSelectorOpIn, "2")))
@@ -1348,9 +1348,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -1364,9 +1364,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceType(opts1))
@@ -1423,9 +1423,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -1439,9 +1439,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceType(opts1))
@@ -1508,9 +1508,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts1.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        0.52,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        0.52,
 				},
 			}
 			opts2 := fake.InstanceTypeOptions{
@@ -1524,9 +1524,9 @@ var _ = Describe("Instance Type Selection", func() {
 			}
 			opts2.Offerings = []cloudprovider.Offering{
 				{
-					OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
-					Requirements:                 scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
-					Price:                        1.0,
+					Available:    true,
+					Requirements: scheduler.NewLabelRequirements(map[string]string{v1.CapacityTypeLabelKey: v1.CapacityTypeSpot, corev1.LabelTopologyZone: "test-zone-1-spot"}),
+					Price:        1.0,
 				},
 			}
 			instanceTypes = append(instanceTypes, fake.NewInstanceType(opts1))

@@ -38,9 +38,6 @@ import (
 var (
 	SpotRequirement     = scheduling.NewRequirements(scheduling.NewRequirement(v1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, v1.CapacityTypeSpot))
 	OnDemandRequirement = scheduling.NewRequirements(scheduling.NewRequirement(v1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, v1.CapacityTypeOnDemand))
-
-	TrueStaticAvailabilityResolver  OfferingAvailabilityResolver = staticAvailabilityResolver{available: true}
-	FalseStaticAvailabilityResolver OfferingAvailabilityResolver = staticAvailabilityResolver{available: false}
 )
 
 type DriftReason string
@@ -249,79 +246,72 @@ func (i InstanceTypeOverhead) Total() corev1.ResourceList {
 	return resources.Merge(i.KubeReserved, i.SystemReserved, i.EvictionThreshold)
 }
 
-// An OfferingAvailabilityResolver is used to determine if there is available capacity for a given offering. To ensure
-// consistency between multiple controllers attempting to provision a NodeClaim with a given offering, offerings should
-// be "reserved" by the controller. Once a launch decision has been made, all offerings which were reserved may be
-// released, enabling their use once again.
-type OfferingAvailabilityResolver interface {
-	Available() bool
+// ReservationManager is used to track the availability of a reserved offering over the course of a scheduling
+// simulation. Reserved offerings may have a limited number of available instances associated with them,
+// This is exposed as an interface for cloudprovider's to implement to give flexibility when dealing with separate
+// offerings with associated availablility.
+type ReservationManager interface {
+	// Reserve takes a unique identifier for a reservation, and returns a boolean indicating if the reservation was
+	// successful. Reserve should be idempotent, i.e. multiple calls with the same reservation ID should only count for a
+	// single reservation.
 	Reserve(string) bool
-	GetReservation(string) OfferingReservation
+	// Release takes a unique identifier for a reservation, and should discard any matching reservations. If no
+	// reservations exist for the given id, release should be a no-op.
+	Release(string)
 }
-
-type OfferingReservation interface {
-	Release()
-	Commit()
-	Matches(*v1.NodeClaim) bool
-}
-
-type OfferingReservations []OfferingReservation
-
-func (r OfferingReservations) Commit() {
-	for _, reservation := range r {
-		reservation.Commit()
-	}
-}
-
-func (r OfferingReservations) Release() {
-	for _, reservation := range r {
-		reservation.Release()
-	}
-}
-
-func (r OfferingReservations) Matching(nc *v1.NodeClaim) OfferingReservations {
-	return lo.Filter(r, func(reservation OfferingReservation, _ int) bool {
-		return reservation.Matches(nc)
-	})
-}
-
 
 // An Offering describes where an InstanceType is available to be used, with the expectation that its properties
 // may be tightly coupled (e.g. the availability of an instance type in some zone is scoped to a capacity type) and
 // these properties are captured with labels in Requirements.
-// Requirements are required to contain the keys v1.CapacityTypeLabelKey and corev1.LabelTopologyZone
+// Requirements are required to contain the keys v1.CapacityTypeLabelKey and corev1.LabelTopologyZone.
 type Offering struct {
-	OfferingAvailabilityResolver
+	// ReservationManager is used for tracking availabity of reserved offerings over the course of a scheduling loop. It
+	// must be non-nil for offerings with capacity type "reserved", but may be nil otherwise.
+	ReservationManager
 
 	Requirements scheduling.Requirements
 	Price        float64
+	Available    bool
 }
 
 type Offerings []Offering
 
-// Reserve attempts to make a reservation for each offering, returning true if it was successful for any.
-func (ofs Offerings) Reserve(id string) bool {
-	success := false
-	for i := range ofs {
-		success = success || ofs[i].Reserve(id)
-	}
-	return success
+// WithCapacityType filters the offerings by the provided capacity type.
+func (ofs Offerings) WithCapacityType(capacityType string) Offerings {
+	return lo.Filter(ofs, func(o Offering, _ int) bool {
+		return o.Requirements.Get(v1.CapacityTypeLabelKey).Any() == capacityType
+	})
 }
 
-func (ofs Offerings) Reservations(id string) OfferingReservations {
-	return lo.FilterMap(ofs, func(o Offering, _ int) (OfferingReservation, bool) {
-		if reservation := o.GetReservation(id); reservation != nil {
-			return reservation, true
-		}
-		return nil, false
+// Reserve attempts to make a reservation for each offering, returning true if it was successful for any.
+func (ofs Offerings) Reserve(id string) Offerings {
+	return lo.Filter(ofs, func(o Offering, _ int) bool {
+		return o.Reserve(id)
 	})
+}
+
+func (ofs Offerings) Release(id string) {
+	for i := range ofs {
+		ofs[i].Release(id)
+	}
 }
 
 // Available filters the available offerings from the returned offerings
 func (ofs Offerings) Available() Offerings {
 	return lo.Filter(ofs, func(o Offering, _ int) bool {
-		return o.Available()
+		return o.Available
 	})
+}
+
+func (ofs Offerings) PartitionCompatible(reqs scheduling.Requirements) (compatible Offerings, incompatible Offerings) {
+	for _, o := range ofs {
+		if reqs.IsCompatible(o.Requirements, scheduling.AllowUndefinedWellKnownLabels) {
+			compatible = append(compatible, o)
+		} else {
+			incompatible = append(incompatible, o)
+		}
+	}
+	return
 }
 
 // Compatible returns the offerings based on the passed requirements
@@ -463,44 +453,5 @@ func NewCreateError(err error, reason, message string) *CreateError {
 		error:            err,
 		ConditionReason:  reason,
 		ConditionMessage: message,
-	}
-}
-
-type staticAvailabilityResolver struct {
-	requirements scheduling.Requirements
-	available bool
-}
-
-type noopReservation struct {
-	requirements scheduling.Requirements
-}
-
-func (r staticAvailabilityResolver) Available() bool {
-	return r.available
-}
-
-func (r staticAvailabilityResolver) Reserve(_ string) bool {
-	return r.available
-}
-
-func (r staticAvailabilityResolver) GetReservation(_ string) OfferingReservation {
-	return noopReservation{
-		requirements: r.requirements,
-	}
-}
-
-func (r noopReservation) Commit() {}
-
-func (r noopReservation) Release() {}
-
-func (r noopReservation) Matches(nc *v1.NodeClaim) bool {
-	reqs := scheduling.NewLabelRequirements(nc.Labels)
-	return reqs.IsCompatible(r.requirements, scheduling.AllowUndefinedWellKnownLabels)
-}
-
-func NewStaticAvailabilityResolver(available bool, requirements scheduling.Requirements) OfferingAvailabilityResolver {
-	return staticAvailabilityResolver{
-		available: available,
-		requirements: requirements,
 	}
 }

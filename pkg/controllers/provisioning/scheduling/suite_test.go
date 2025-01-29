@@ -1752,12 +1752,12 @@ var _ = Context("Scheduling", func() {
 					},
 					Offerings: []cloudprovider.Offering{
 						{
-							OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+							Available: true,
 							Requirements: pscheduling.NewLabelRequirements(map[string]string{
 								v1.CapacityTypeLabelKey:  v1.CapacityTypeOnDemand,
 								corev1.LabelTopologyZone: "test-zone-1a",
 							}),
-							Price:     3.00,
+							Price: 3.00,
 						},
 					},
 				}),
@@ -1769,12 +1769,12 @@ var _ = Context("Scheduling", func() {
 					},
 					Offerings: []cloudprovider.Offering{
 						{
-							OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+							Available: true,
 							Requirements: pscheduling.NewLabelRequirements(map[string]string{
 								v1.CapacityTypeLabelKey:  v1.CapacityTypeOnDemand,
 								corev1.LabelTopologyZone: "test-zone-1a",
 							}),
-							Price:     2.00,
+							Price: 2.00,
 						},
 					},
 				}),
@@ -1786,12 +1786,12 @@ var _ = Context("Scheduling", func() {
 					},
 					Offerings: []cloudprovider.Offering{
 						{
-							OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+							Available: true,
 							Requirements: pscheduling.NewLabelRequirements(map[string]string{
 								v1.CapacityTypeLabelKey:  v1.CapacityTypeOnDemand,
 								corev1.LabelTopologyZone: "test-zone-1a",
 							}),
-							Price:     1.00,
+							Price: 1.00,
 						},
 					},
 				}),

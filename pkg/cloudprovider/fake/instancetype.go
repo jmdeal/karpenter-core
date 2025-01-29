@@ -66,7 +66,7 @@ func NewInstanceTypeWithCustomRequirement(options InstanceTypeOptions, customReq
 	if len(options.Offerings) == 0 {
 		options.Offerings = []cloudprovider.Offering{
 			{
-				OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+				Available: true,
 				Requirements: scheduling.NewLabelRequirements(map[string]string{
 					v1.CapacityTypeLabelKey:  "spot",
 					corev1.LabelTopologyZone: "test-zone-1",
@@ -74,7 +74,7 @@ func NewInstanceTypeWithCustomRequirement(options InstanceTypeOptions, customReq
 				Price: PriceFromResources(options.Resources),
 			},
 			{
-				OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+				Available: true,
 				Requirements: scheduling.NewLabelRequirements(map[string]string{
 					v1.CapacityTypeLabelKey:  "spot",
 					corev1.LabelTopologyZone: "test-zone-2",
@@ -82,7 +82,7 @@ func NewInstanceTypeWithCustomRequirement(options InstanceTypeOptions, customReq
 				Price: PriceFromResources(options.Resources),
 			},
 			{
-				OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+				Available: true,
 				Requirements: scheduling.NewLabelRequirements(map[string]string{
 					v1.CapacityTypeLabelKey:  "on-demand",
 					corev1.LabelTopologyZone: "test-zone-1",
@@ -90,7 +90,7 @@ func NewInstanceTypeWithCustomRequirement(options InstanceTypeOptions, customReq
 				Price: PriceFromResources(options.Resources),
 			},
 			{
-				OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+				Available: true,
 				Requirements: scheduling.NewLabelRequirements(map[string]string{
 					v1.CapacityTypeLabelKey:  "on-demand",
 					corev1.LabelTopologyZone: "test-zone-2",
@@ -98,7 +98,7 @@ func NewInstanceTypeWithCustomRequirement(options InstanceTypeOptions, customReq
 				Price: PriceFromResources(options.Resources),
 			},
 			{
-				OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+				Available: true,
 				Requirements: scheduling.NewLabelRequirements(map[string]string{
 					v1.CapacityTypeLabelKey:  "on-demand",
 					corev1.LabelTopologyZone: "test-zone-3",
@@ -173,7 +173,7 @@ func InstanceTypesAssorted() []*cloudprovider.InstanceType {
 							price := PriceFromResources(opts.Resources)
 							opts.Offerings = []cloudprovider.Offering{
 								{
-									OfferingAvailabilityResolver: cloudprovider.TrueStaticAvailabilityResolver,
+									Available: true,
 									Requirements: scheduling.NewLabelRequirements(map[string]string{
 										v1.CapacityTypeLabelKey:  ct,
 										corev1.LabelTopologyZone: zone,
