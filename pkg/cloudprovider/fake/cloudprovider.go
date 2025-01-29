@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/awslabs/operatorpkg/option"
 	"github.com/awslabs/operatorpkg/status"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
@@ -189,7 +190,7 @@ func (c *CloudProvider) List(_ context.Context) ([]*v1.NodeClaim, error) {
 	}), nil
 }
 
-func (c *CloudProvider) GetInstanceTypes(_ context.Context, np *v1.NodePool) ([]*cloudprovider.InstanceType, error) {
+func (c *CloudProvider) GetInstanceTypes(_ context.Context, np *v1.NodePool, _ ...option.Function[cloudprovider.GetInstanceTypeOptions]) ([]*cloudprovider.InstanceType, error) {
 	if np != nil {
 		if err, ok := c.ErrorsForNodePool[np.Name]; ok {
 			return nil, err

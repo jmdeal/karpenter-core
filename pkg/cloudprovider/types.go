@@ -25,9 +25,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/awslabs/operatorpkg/option"
 	"github.com/awslabs/operatorpkg/status"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	v1 "sigs.k8s.io/karpenter/pkg/apis/v1"
@@ -67,7 +69,7 @@ type CloudProvider interface {
 	// Availability of types or zone may vary by nodepool or over time.  Regardless of
 	// availability, the GetInstanceTypes method should always return all instance types,
 	// even those with no offerings available.
-	GetInstanceTypes(context.Context, *v1.NodePool) ([]*InstanceType, error)
+	GetInstanceTypes(context.Context, *v1.NodePool, ...option.Function[GetInstanceTypeOptions]) ([]*InstanceType, error)
 	// IsDrifted returns whether a NodeClaim has drifted from the provisioning requirements
 	// it is tied to.
 	IsDrifted(context.Context, *v1.NodeClaim) (DriftReason, error)
@@ -79,6 +81,18 @@ type CloudProvider interface {
 	// GetSupportedNodeClasses returns CloudProvider NodeClass that implements status.Object
 	// NOTE: It returns a list where the first element should be the default NodeClass
 	GetSupportedNodeClasses() []status.Object
+}
+
+type GetInstanceTypeOptions struct {
+	AvailabilitySnapshotUUID types.UID
+}
+
+// GetInstanceTypes calls made with the same snapshot ID should have a consistent view of offering availability. This
+// is crucial for offerings with capacity type "reserved" since cross-nodepool offerings may share availability.
+func WithAvailabilitySnapshotUUID(uuid types.UID) option.Function[GetInstanceTypeOptions] {
+	return func(opts *GetInstanceTypeOptions) {
+		opts.AvailabilitySnapshotUUID = uuid
+	}
 }
 
 // InstanceType describes the properties of a potential node (either concrete attributes of an instance of this type

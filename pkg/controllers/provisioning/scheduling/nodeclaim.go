@@ -42,12 +42,13 @@ import (
 type NodeClaim struct {
 	NodeClaimTemplate
 
-	Pods              []*corev1.Pod
-	reservedOfferings map[string]cloudprovider.Offerings
-	topology          *Topology
-	hostPortUsage     *scheduling.HostPortUsage
-	daemonResources   corev1.ResourceList
-	hostname          string
+	Pods                 []*corev1.Pod
+	reservedOfferings    map[string]cloudprovider.Offerings
+	reservedOfferingMode ReservedOfferingMode
+	topology             *Topology
+	hostPortUsage        *scheduling.HostPortUsage
+	daemonResources      corev1.ResourceList
+	hostname             string
 }
 
 type NodePoolLimitsExceededError struct {
@@ -57,11 +58,6 @@ type NodePoolLimitsExceededError struct {
 func (e NodePoolLimitsExceededError) Error() string {
 	return fmt.Sprintf("all available instance types exceed limits for nodepool: %q", e.nodePool)
 }
-
-// type IncompatibleNodeClaimTemplateError struct {
-// 	nodePool          string
-// 	daemonSetOverhead corev1.ResourceList
-// }
 
 // ReservedOfferingError indicates a NodeClaim couldn't be created or a pod couldn't be added to an exxisting NodeClaim
 // due to
@@ -88,6 +84,7 @@ func NewNodeClaimForPod(
 	remainingResources corev1.ResourceList,
 	pod *corev1.Pod,
 	podRequests corev1.ResourceList,
+	reservedOfferingMode ReservedOfferingMode,
 ) (*NodeClaim, error) {
 	// Ensure we don't consider instance types which would exceed the limits of the NodePool
 	instanceTypes := filterByRemainingResources(nodeClaimTemplate.InstanceTypeOptions, remainingResources)
@@ -200,6 +197,7 @@ func (n *NodeClaim) Add(pod *corev1.Pod, podRequests corev1.ResourceList) error 
 // offerings in a map from instance type name to offerings. Additionally, a slice of offerings to release is returned.
 // This is based on the previously reserved offerings which are no longer compatible with the nodeclaim. These should
 // not be released until we're ready to persist the changes to the nodeclaim.
+// nolint:gocyclo
 func (n *NodeClaim) reserveOfferings(
 	instanceTypes []*cloudprovider.InstanceType,
 	nodeClaimRequirements scheduling.Requirements,
@@ -225,18 +223,21 @@ func (n *NodeClaim) reserveOfferings(
 			reservedOfferings[it.Name] = reserved
 		}
 	}
-	// If an instance type with a compatible reserved offering exists, but we failed to make any reservations, we should
-	// fail. We include this check due to the pessimistic nature of instance reservation - we have to reserve each potential
-	// offering for every nodeclaim, since we don't know what we'll launch with. Without this check we would fall back to
-	// on-demand / spot even when there's sufficient reserved capacity. This check means we may fail to schedule the pod
-	// during this scheduling simulation, but with the possibility of success on subsequent simulations.
-	if len(compatibleReservedInstanceTypes) != 0 && len(reservedOfferings) == 0 {
-		return nil, nil, NewReservedOfferingError(fmt.Errorf("one or more instance types with compatible reserved offerings are available, but could not be reserved"))
-	}
-	// If the nodeclaim previously had compatible reserved offerings, but the additional requirements filtered those out,
-	// we should fail to add the pod to this nodeclaim.
-	if len(n.reservedOfferings) != 0 && len(reservedOfferings) == 0 {
-		return nil, nil, NewReservedOfferingError(fmt.Errorf("satisfying constraints would result "))
+	if n.reservedOfferingMode == ReservedOfferingModeStrict {
+		// If an instance type with a compatible reserved offering exists, but we failed to make any reservations, we should
+		// fail. We include this check due to the pessimistic nature of instance reservation - we have to reserve each potential
+		// offering for every nodeclaim, since we don't know what we'll launch with. Without this check we would fall back to
+		// on-demand / spot even when there's sufficient reserved capacity. This check means we may fail to schedule the pod
+		// during this scheduling simulation, but with the possibility of success on subsequent simulations.
+		// Note: while this can occur both on initial creation and on
+		if len(compatibleReservedInstanceTypes) != 0 && len(reservedOfferings) == 0 {
+			return nil, nil, NewReservedOfferingError(fmt.Errorf("one or more instance types with compatible reserved offerings are available, but could not be reserved"))
+		}
+		// If the nodeclaim previously had compatible reserved offerings, but the additional requirements filtered those out,
+		// we should fail to add the pod to this nodeclaim.
+		if len(n.reservedOfferings) != 0 && len(reservedOfferings) == 0 {
+			return nil, nil, NewReservedOfferingError(fmt.Errorf("satisfying constraints would result "))
+		}
 	}
 	// Ensure we release any offerings for instance types which are no longer compatible with nodeClaimRequirements
 	for instanceName, offerings := range n.reservedOfferings {
